@@ -1,0 +1,6 @@
+debug
+release
+tmp
+*.ncb
+*.suo
+*.swp
