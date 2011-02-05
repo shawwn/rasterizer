@@ -6,6 +6,173 @@
 #pragma comment(lib, "winmm.lib")
 #endif //defined( WIN32 )
 
+//=======================================================================/
+// Types
+//=======================================================================/
+
+// basic types
+typedef unsigned int		uint;
+typedef unsigned char		byte;
+
+// fixed-width types
+typedef unsigned int		uint32_t;
+typedef unsigned short		uint16_t;
+typedef unsigned char		uint8_t;
+
+//=======================================================================/
+// Assert
+//=======================================================================/
+#include <assert.h>
+#define Assert( x )				assert( x )
+
+//=======================================================================/
+// Memory
+//=======================================================================/
+#include <stdlib.h>
+
+#define MemAlloc( size )		malloc( size )
+#define MemCAlloc( size )		calloc( 1, size )
+#define MemFree( p )			free( p )
+#define MemSet( p, val, size )	memset( p, val, size )
+#define MemZero( p, size )		memset( p, 0, size )
+
+#define ObjAlloc( type )		MemCAlloc( sizeof( type ) )
+#define ObjFree( p )			MemFree( p )
+
+//***********************************************************************/
+// Graphics
+//***********************************************************************/
+
+//=======================================================================/
+// ARGB
+//=======================================================================/
+typedef struct ARGB_t
+{
+	union
+	{
+		byte		p[4];
+		uint32_t	color;
+	};
+} ARGB;
+
+//=======================================================================/
+// Framebuffer
+//=======================================================================/
+typedef struct SFramebuffer_t
+{
+	uint	w;			// width
+	uint	h;			// height
+	ARGB*	colors;		// BGRA pixels
+} SFramebuffer;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SFramebuffer*
+Framebuffer_New( uint width, uint height )
+{
+	SFramebuffer*	obj;
+
+	Assert( width > 0 && height > 0 );
+	
+	obj = ObjAlloc( SFramebuffer );
+	obj->w			= width;
+	obj->h			= height;
+	obj->colors		= MemAlloc( sizeof( ARGB ) * width * height );
+
+	return obj;
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void
+Framebuffer_Delete( SFramebuffer** obj )
+{
+	Assert( obj != NULL );
+	if ( *obj )
+	{
+		free( (*obj)->colors );
+		free( (*obj) );
+
+		(*obj) = NULL;
+	}
+}
+
+//***********************************************************************/
+// Application
+//***********************************************************************/
+typedef struct SApp_t
+{
+	// public.
+	SFramebuffer*	framebuffer;
+	uint			fps;
+
+	// private.
+	uint			_fpsCounter;
+	uint			_fpsClock;
+} SApp;
+
+SApp	App;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+int
+App_Startup( long iRandSeed )
+{
+	srand( iRandSeed );
+
+	MemZero( &App, sizeof( SApp ) );
+
+	return 1;
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void
+App_Resize( uint width, uint height )
+{
+	Framebuffer_Delete( &App.framebuffer );
+	App.framebuffer = Framebuffer_New( width, height );
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void
+App_Shutdown()
+{
+	Framebuffer_Delete( &App.framebuffer );
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+int
+App_Update( uint dt )
+{
+	if ( dt > 0 )
+	{
+		// update FPS.
+		{
+			App._fpsClock += dt;
+			if ( App._fpsClock >= 1000 )
+			{
+				App.fps = App._fpsCounter;
+				App._fpsCounter = 0;
+				App._fpsClock %= 1000;
+			}
+			++App._fpsCounter;
+		}
+
+		// rasterize.
+		{
+			uint y, x;
+			for ( y = 0; y < App.framebuffer->h; ++y )
+				for ( x = 0; x < App.framebuffer->w; ++x )
+				{
+					ARGB* pixel = &App.framebuffer->colors[ y*App.framebuffer->w + x ];
+
+					pixel->p[0] = rand() % 256;
+					pixel->p[1] = pixel->p[0];
+					pixel->p[2] = pixel->p[0];
+					pixel->p[3] = pixel->p[0];
+				}
+		}
+	}
+	return 1;
+}
+
 //***********************************************************************/
 // Windows
 //***********************************************************************/
@@ -28,10 +195,10 @@ Wnd_CreateWindow( unsigned int x, unsigned int y,
 {
 	HINSTANCE		hInstance;
 
-    static TCHAR	szAppName[] = TEXT( "rasterizer" );
+	static TCHAR	szAppName[] = TEXT( "rasterizer" );
 	static BOOL		bNeedRegister = TRUE;
 
-    WNDCLASSEX		wndclassex = {0};
+	WNDCLASSEX		wndclassex = {0};
 
 	DWORD			dwStyle, dwExStyle;
 
@@ -44,18 +211,18 @@ Wnd_CreateWindow( unsigned int x, unsigned int y,
 	dwStyle		= CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
 	dwExStyle	= WS_OVERLAPPEDWINDOW;
 
-    wndclassex.cbSize        = sizeof( WNDCLASSEX );
-    wndclassex.style         = dwStyle;
-    wndclassex.lpfnWndProc   = WndProc;
-    wndclassex.cbClsExtra    = 0;
-    wndclassex.cbWndExtra    = 0;
-    wndclassex.hInstance     = hInstance;
-    wndclassex.hIcon         = LoadIcon( NULL, IDI_APPLICATION );
-    wndclassex.hCursor       = LoadCursor( NULL, IDC_ARROW );
-    wndclassex.hbrBackground = NULL;//(HBRUSH)GetStockObject( WHITE_BRUSH );
-    wndclassex.lpszMenuName  = NULL;
-    wndclassex.lpszClassName = szAppName;
-    wndclassex.hIconSm       = wndclassex.hIcon;
+	wndclassex.cbSize        = sizeof( WNDCLASSEX );
+	wndclassex.style         = dwStyle;
+	wndclassex.lpfnWndProc   = WndProc;
+	wndclassex.cbClsExtra    = 0;
+	wndclassex.cbWndExtra    = 0;
+	wndclassex.hInstance     = hInstance;
+	wndclassex.hIcon         = LoadIcon( NULL, IDI_APPLICATION );
+	wndclassex.hCursor       = LoadCursor( NULL, IDC_ARROW );
+	wndclassex.hbrBackground = NULL;//(HBRUSH)GetStockObject( WHITE_BRUSH );
+	wndclassex.lpszMenuName  = NULL;
+	wndclassex.lpszClassName = szAppName;
+	wndclassex.hIconSm       = wndclassex.hIcon;
 
 	rect.right	= width;
 	rect.bottom	= height;
@@ -67,34 +234,34 @@ Wnd_CreateWindow( unsigned int x, unsigned int y,
 		MessageBox( NULL, TEXT( "AdjustWindowRectEx failed!" ), szAppName, MB_ICONERROR );
 		return 0;
 	}
-	
+
 	if ( bNeedRegister )
 	{
-	    if ( !RegisterClassEx( &wndclassex ) )
-	    {
+		if ( !RegisterClassEx( &wndclassex ) )
+		{
 			MessageBox( NULL, TEXT( "RegisterClassEx failed!" ), szAppName, MB_ICONERROR );
-	        return 0;
-	    }
+			return 0;
+		}
 		bNeedRegister = FALSE;
 	}
 
-    hwnd = CreateWindowEx( WS_EX_OVERLAPPEDWINDOW, 
-		                  szAppName, 
-        		          TEXT ("WindowTitle"),
-                		  dwExStyle,
-						  0,
-						  0,
-						  rect.right - rect.left,
-						  rect.bottom - rect.top,
-        		          NULL, 
-                		  NULL, 
-		                  hInstance,
-        		          NULL ); 
-    if ( !hwnd )
-    {
+	hwnd = CreateWindowEx( WS_EX_OVERLAPPEDWINDOW, 
+		szAppName, 
+		TEXT ("WindowTitle"),
+		dwExStyle,
+		0,
+		0,
+		rect.right - rect.left,
+		rect.bottom - rect.top,
+		NULL, 
+		NULL, 
+		hInstance,
+		NULL ); 
+	if ( !hwnd )
+	{
 		MessageBox( NULL, TEXT( "CreateWindowEx failed!" ), szAppName, MB_ICONERROR );
-        return 0;
-    }
+		return 0;
+	}
 
 	return hwnd;
 }
@@ -206,17 +373,35 @@ Wnd_ShutdownGL( HGLRC hGLRC )
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void
-Wnd_FrameGL()
+Wnd_FrameGL( uint32_t* colors, unsigned int width, unsigned int height )
 {
+	// clear the framebuffer.
 	glClearColor( 1.0f, 0.0f, 0.0f, 1.0f );
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
+	// load the frame.
+	{
+		GLuint	tex = 0;
+
+		glEnable( GL_TEXTURE_2D );
+
+		// transfer the current frame to OpenGL.
+		glGenTextures( 1, &tex );
+		glBindTexture( GL_TEXTURE_2D, tex );
+		glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, colors );
+
+		// use point sampling.
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	}
+
+	// render the frame.
 	glBegin( GL_QUADS );
 	{
-		glVertex2f( 0.5f,-0.5f );
-		glVertex2f( 0.5f, 0.5f );
-		glVertex2f(-0.5f, 0.5f );
-		glVertex2f(-0.5f,-0.5f );
+		glTexCoord2f( 1.0f, 0.0f ); glVertex2f( 1.0f,-1.0f );
+		glTexCoord2f( 1.0f, 1.0f ); glVertex2f( 1.0f, 1.0f );
+		glTexCoord2f( 0.0f, 1.0f ); glVertex2f(-1.0f, 1.0f );
+		glTexCoord2f( 0.0f, 0.0f ); glVertex2f(-1.0f,-1.0f );
 	}
 	glEnd();
 }
@@ -249,7 +434,6 @@ WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdS
 {
 	HWND		hWnd;
 	HDC			hDC;
-	long			iSeedRand;
 
 	hWnd = Wnd_CreateWindow( 100, 100, 800, 600 );
 
@@ -262,13 +446,6 @@ WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdS
 
 	Wnd_SetVSync( hDC, 1 );
 
-	iSeedRand = (long)time(NULL);
-	srand( iSeedRand );
-
-#if 0
-	App_Resize( g_wndW, g_wndH, g_wndBits );
-#endif
-
     ShowWindow( hWnd, iCmdShow );
     UpdateWindow( hWnd );
 
@@ -279,21 +456,19 @@ WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdS
 		unsigned int prevFPS = ~0;
 		while ( Wnd_DoEvents() )
 		{
-			/*
 			if ( !App_Update( dTime ) )
 				break;
 
-			if ( App->fps != prevFPS )
+			if ( App.fps != prevFPS )
 			{
-				char buf[512];
-				_itoa( App->fps, buf, 10 );
-				SetWindowTextA( g_wnd, buf );
+				char buf[ 512 ];
+				_itoa( App.fps, buf, 10 );
+				SetWindowTextA( hWnd, buf );
 
-				prevFPS = App->fps;
+				prevFPS = App.fps;
 			}
-			*/
 
-			Wnd_FrameGL();
+			Wnd_FrameGL( (uint32_t*)App.framebuffer->colors, App.framebuffer->w, App.framebuffer->h );
 
 			SwapBuffers( hDC );
 
@@ -305,12 +480,8 @@ WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdS
 			}
 		}
 	}
-#if 0
-	g_done = TRUE;
 
-	WndResize( NULL, NULL );
 	App_Shutdown();
-#endif
 
     return 0;
 }
@@ -327,6 +498,7 @@ WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 		{
 			hGLRC = Wnd_StartupGL( GetDC( hWnd ) );
 			timeBeginPeriod( 1 );
+			App_Startup( (long)time( NULL ) );
 		}
         return 0;
 
@@ -341,21 +513,15 @@ WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
 
 	case WM_SIZE:
 		{
-#if 0
-			WndResize( hwnd, g_wndDC );
-			App_Resize( g_wndW, g_wndH, g_wndBits );
-#endif
-			if ( hGLRC != NULL )
+			RECT rect;
+			if ( GetClientRect( hWnd, &rect ) )
 			{
-				RECT rect;
-				if ( GetClientRect( hWnd, &rect ) )
-				{
-					glViewport(
-						0,
-						0,
-						rect.right - rect.left,
-						rect.bottom - rect.top );
-				}
+				uint width	= rect.right - rect.left;
+				uint height	= rect.bottom - rect.top;
+
+				App_Resize( width, height );
+				if ( hGLRC != NULL )
+					glViewport( 0, 0, width, height );
 			}
 		}
 		return 0;

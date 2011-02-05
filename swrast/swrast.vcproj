@@ -172,7 +172,7 @@
 	</References>
 	<Files>
 		<File
-			RelativePath=".\main_win.c"
+			RelativePath=".\rast1.c"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"
@@ -194,6 +194,20 @@
 		<File
 			RelativePath=".\rast2.c"
 			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
 		</File>
 	</Files>
 	<Globals>

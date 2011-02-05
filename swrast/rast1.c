@@ -2345,35 +2345,33 @@ App_Update( uint dt )
 		V2( t.v[2].uv, 0.0f, 1.0f );
 		//V2( t.v[2].uv, 0.0f, Lerp( 0.5f, 1.0f, (float)RandomValue() ) );
 
-		/*
-		int		i;
-		V2( t.v[0].pos, -1.0f,  1.0f );
-		V2( t.v[1].pos, -1.0f, -1.0f );
-		V2( t.v[2].pos,  1.0f, -1.0f );
-		//for ( i = 0; i < 3; ++i )
-			//t.v[i].pos.x += 1.0f / (float)W + kSmallW;
-		R_DrawTri( App->rast, &t );
-		*/
 
+#if 0
 		V2( t.v[0].pos, -0.60f, -0.60f );
 		V2( t.v[1].pos,  0.50f, -0.50f );
 		V2( t.v[2].pos, -0.50f,  0.50f );
 		//for ( i = 0; i < 3; ++i )
 			//t.v[i].pos.x += 1.0f / (float)W + kSmallW;
 		R_DrawTri( App->rast, &t );
+#endif
 
-		/*
-		V2( t.v[0].pos, -1.0f,  1.0f );
-		V2( t.v[1].pos,  1.0f, -1.0f );
-		V2( t.v[2].pos,  1.0f,  1.0f );
-		//for ( i = 0; i < 3; ++i )
-			//t.v[i].pos.x += 1.0f / (float)W + kSmallW;
-		R_DrawTri( App->rast, &t );
-		*/
+#if 1
+		{
+			V2( t.v[0].pos, -1.0f,  1.0f );
+			V2( t.v[1].pos, -1.0f, -1.0f );
+			V2( t.v[2].pos,  1.0f, -1.0f );
+			R_DrawTri( App->rast, &t );
 
-		/*
-		Assert( App->rast->pixelsDrawn == (W*H)/2 );
-		*/
+			V2( t.v[0].pos, -1.0f,  1.0f );
+			V2( t.v[1].pos,  1.0f, -1.0f );
+			V2( t.v[2].pos,  1.0f,  1.0f );
+			R_DrawTri( App->rast, &t );
+
+			/*
+			Assert( App->rast->pixelsDrawn == (W*H)/2 );
+			*/
+		}
+#endif
 
 		App->rast->pixelsDrawn = 0;
 	}

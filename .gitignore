@@ -4,3 +4,4 @@ tmp
 *.ncb
 *.suo
 *.swp
+*.vcproj.*
