@@ -6,6 +6,10 @@
 #pragma comment(lib, "winmm.lib")
 #endif //defined( WIN32 )
 
+//***********************************************************************/
+// Fundamentals
+//***********************************************************************/
+
 //=======================================================================/
 // Types
 //=======================================================================/
@@ -29,6 +33,7 @@ typedef unsigned char		uint8_t;
 // Memory
 //=======================================================================/
 #include <stdlib.h>
+#include <memory.h>
 
 #define MemAlloc( size )		malloc( size )
 #define MemCAlloc( size )		calloc( 1, size )
@@ -40,7 +45,104 @@ typedef unsigned char		uint8_t;
 #define ObjFree( p )			MemFree( p )
 
 //***********************************************************************/
-// Graphics
+// Vector Math
+//***********************************************************************/
+#include <math.h>
+typedef struct SVec2_t
+{
+	union
+	{
+		float		m[2];
+		struct
+		{
+			float	x;
+			float	y;
+		};
+	};
+} SVec2;
+
+typedef struct SVec3_t
+{
+	union
+	{
+		float		m[3];
+		struct
+		{
+			float	x;
+			float	y;
+			float	z;
+		};
+	};
+} SVec3;
+
+typedef struct SVec4_t
+{
+	union
+	{
+		float		m[4];
+		struct
+		{
+			float	x;
+			float	y;
+			float	z;
+			float	w;
+		};
+	};
+} SVec4;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+const SVec2*
+Vec2( SVec2* v, float x, float y )
+{
+	v->x = x;
+	v->y = y;
+	return v;
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+const SVec3*
+Vec3( SVec3* v, float x, float y, float z )
+{
+	v->x = x;
+	v->y = y;
+	v->z = z;
+	return v;
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+const SVec4*
+Vec4( SVec4* v, float x, float y, float z, float w )
+{
+	v->x = x;
+	v->y = y;
+	v->z = z;
+	v->w = w;
+	return v;
+}
+
+//***********************************************************************/
+// 2D Geometry
+//***********************************************************************/
+void
+Geo2D_Perpendicular( float* X, float* Y )
+{
+	float x = *X;
+	float y = *Y;
+	*X = -y;
+	*Y =  x;
+}
+
+//***********************************************************************/
+// Graphics - Vertex
+//***********************************************************************/
+typedef struct GrVertex_t
+{
+	SVec3	pos;
+	SVec2	tex;
+} GrVertex;
+
+//***********************************************************************/
+// Graphics - Framebuffer
 //***********************************************************************/
 
 //=======================================================================/
@@ -50,7 +152,7 @@ typedef struct ARGB_t
 {
 	union
 	{
-		byte		p[4];
+		byte		m[4];
 		uint32_t	color;
 	};
 } ARGB;
@@ -95,6 +197,172 @@ Framebuffer_Delete( SFramebuffer** obj )
 	}
 }
 
+//=======================================================================/
+// Rasterizer
+//=======================================================================/
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void
+Rasterizer_Barycentric( float* u, float* v,
+					   float x, float y,
+					   float Sx, float Sy,
+					   float Tx, float Ty )
+{
+	// [ Sx Sy ][ u ]   [ x ]
+	// [ Tx Ty ][ v ] = [ y ]
+	//
+	//      | x Sy |   | Sx Sy |
+	// u =  | y Ty | / | Tx Ty |
+	//
+	//      | Sx x |   | Sx Sy |
+	// v =  | Tx y | / | Tx Ty |
+	//
+
+	*u = ( x*Ty - Sy*y ) / ( Sx*Ty - Sy*Tx );
+	*v = ( Sx*y - x*Tx ) / ( Sx*Ty - Sy*Tx );
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+int
+Rasterizer_Inside( float Px, float Py,
+				  float Ax, float Ay,
+				  float Bx, float By,
+				  float Cx, float Cy )
+{
+	float ABx, ABy, ABd;
+	float BCx, BCy, BCd;
+	float CAx, CAy, CAd;
+
+	ABx = Bx - Ax;
+	ABy = By - Ay;
+	Geo2D_Perpendicular( &ABx, &ABy );
+	ABd = -( ABx*Ax + ABy*Ay );
+
+	BCx = Cx - Bx;
+	BCy = Cy - By;
+	Geo2D_Perpendicular( &BCx, &BCy );
+	BCd = -( BCx*Bx + BCy*By );
+
+	CAx = Ax - Cx;
+	CAy = Ay - Cy;
+	Geo2D_Perpendicular( &CAx, &CAy );
+	CAd = -( CAx*Cx + CAy*Cy );
+
+	{
+		float dAB, dBC, dCA;
+
+		dAB = ( ABx*Px + ABy*Py );
+		dBC = ( BCx*Px + BCy*Py );
+		dCA = ( CAx*Px + CAy*Py );
+
+		if ( dAB >= -ABd )
+		{
+			if ( dBC >= -BCd )
+			{
+				if ( dCA >= -CAd )
+					return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void
+Rasterizer_DrawTri( SFramebuffer* fb, const GrVertex* verts )
+{
+	int		W, H;
+
+	SVec2	S;
+	SVec2	T;
+
+	const GrVertex*		A;
+	const GrVertex*		B;
+	const GrVertex*		C;
+
+	float	Ax, Ay, Bx, By, Cx, Cy;
+
+	float	det;
+
+	W = (int)fb->w;
+	H = (int)fb->h;
+
+	A = &verts[0];
+	B = &verts[1];
+	C = &verts[2];
+
+	Ax = W*( 0.5f*A->pos.x + 0.5f );
+	Ay = H*( 0.5f*A->pos.y + 0.5f );
+	Bx = W*( 0.5f*B->pos.x + 0.5f );
+	By = H*( 0.5f*B->pos.y + 0.5f );
+	Cx = W*( 0.5f*C->pos.x + 0.5f );
+	Cy = H*( 0.5f*C->pos.y + 0.5f );
+
+	Vec2( &S,
+		Bx - Ax,
+		By - Ay );
+
+	Vec2( &T,
+		Cx - Ax,
+		Cy - Ay );
+
+	det = S.x*T.y - S.y*T.x;
+	if ( det <= 0.0f )
+		return;
+
+	{
+		int		y, x;
+
+		for ( y = 0; y < H; ++y )
+		{
+			for ( x = 0; x < W; ++x )
+			{
+				float	u, v, w;
+				float	r = 0.0f;
+				float	g = 0.0f;
+				float	b = 0.0f;
+
+				ARGB* pixel = &fb->colors[ y*W + x ];
+
+				if ( Rasterizer_Inside(
+					(float)x, (float)y,
+					Ax, Ay,
+					Bx, By,
+					Cx, Cy ) )
+				{
+					Rasterizer_Barycentric(
+						&u, &v,
+						x - Ax, y - Ay,
+						S.x, T.x,
+						S.y, T.y );
+
+					//w = 1.0f - u - v;
+
+					r = u;
+					g = v;
+					//b = 0.5f*w + 0.5f;
+
+					if ( r < 0.0f ) r = 0.0f;
+					if ( r > 1.0f ) r = 1.0f;
+
+					if ( g < 0.0f ) g = 0.0f;
+					if ( g > 1.0f ) g = 1.0f;
+
+					if ( b < 0.0f ) b = 0.0f;
+					if ( b > 1.0f ) b = 1.0f;
+
+					pixel->m[0] = (byte)( ( r * 255.0f ) );
+					pixel->m[1] = (byte)( ( g * 255.0f ) );
+					pixel->m[2] = (byte)( ( b * 255.0f ) );
+
+					pixel->m[3] = 0;
+				}
+			}
+		}
+	}
+}
+
 //***********************************************************************/
 // Application
 //***********************************************************************/
@@ -102,6 +370,7 @@ typedef struct SApp_t
 {
 	// public.
 	SFramebuffer*	framebuffer;
+
 	uint			fps;
 
 	// private.
@@ -118,6 +387,19 @@ App_Startup( long iRandSeed )
 	srand( iRandSeed );
 
 	MemZero( &App, sizeof( SApp ) );
+
+	{
+		SVec3 vA;
+		vA.x = 1.0f;
+		vA.y = 2.0f;
+		vA.z = 3.0f;
+
+		{
+			int i;
+			for ( i = 0; i < 3; ++i )
+				vA.m[i] = 0.0f;
+		}
+	}
 
 	return 1;
 }
@@ -156,18 +438,66 @@ App_Update( uint dt )
 		}
 
 		// rasterize.
+		if ( 0 )
 		{
 			uint y, x;
 			for ( y = 0; y < App.framebuffer->h; ++y )
+			{
 				for ( x = 0; x < App.framebuffer->w; ++x )
 				{
 					ARGB* pixel = &App.framebuffer->colors[ y*App.framebuffer->w + x ];
 
-					pixel->p[0] = rand() % 256;
-					pixel->p[1] = pixel->p[0];
-					pixel->p[2] = pixel->p[0];
-					pixel->p[3] = pixel->p[0];
+					pixel->m[0] = rand() % 256;
+					pixel->m[1] = pixel->m[0];
+					pixel->m[2] = pixel->m[0];
+					pixel->m[3] = pixel->m[0];
 				}
+			}
+
+			for ( y = 0; y < 1; ++y )
+			{
+				for ( x = 0; x < App.framebuffer->w; ++x )
+				{
+					ARGB* pixel = &App.framebuffer->colors[ y*App.framebuffer->w + x ];
+					pixel->color = 0x0000FF00;
+				}
+			}
+			for ( y = App.framebuffer->h - 1; y < App.framebuffer->h; ++y )
+			{
+				for ( x = 0; x < App.framebuffer->w; ++x )
+				{
+					ARGB* pixel = &App.framebuffer->colors[ y*App.framebuffer->w + x ];
+					pixel->color = 0x00007F00;
+				}
+			}
+
+			for ( y = 0; y < App.framebuffer->h; ++y )
+			{
+				for ( x = 0; x < 1; ++x )
+				{
+					ARGB* pixel = &App.framebuffer->colors[ y*App.framebuffer->w + x ];
+					pixel->color = 0x000000FF;
+				}
+			}
+			for ( y = 0; y < App.framebuffer->h; ++y )
+			{
+				for ( x = App.framebuffer->w - 1; x < App.framebuffer->w; ++x )
+				{
+					ARGB* pixel = &App.framebuffer->colors[ y*App.framebuffer->w + x ];
+					pixel->color = 0x0000007F;
+				}
+			}
+		}
+		else
+		{
+			GrVertex v[3];
+			//Vec3( &v[0].position,  1.0f, 1.0f, 0.0f ); Vec2( &v[0].texcoord, 1.0f, 1.0f );
+			//Vec3( &v[1].position, -1.0f, 1.0f, 0.0f ); Vec2( &v[1].texcoord, 0.0f, 1.0f );
+			//Vec3( &v[2].position, -1.0f,-1.0f, 0.0f ); Vec2( &v[2].texcoord, 0.0f, 0.0f );
+			Vec3( &v[0].pos,  0.0f, 0.6f, 0.0f ); Vec2( &v[0].tex, 1.0f, 1.0f );
+			Vec3( &v[1].pos, -1.0f, 0.1f, 0.0f ); Vec2( &v[1].tex, 0.0f, 1.0f );
+			Vec3( &v[2].pos,  1.0f, 0.5f, 0.0f ); Vec2( &v[2].tex, 0.0f, 0.0f );
+			Rasterizer_DrawTri( App.framebuffer, v );
 		}
 	}
 	return 1;
